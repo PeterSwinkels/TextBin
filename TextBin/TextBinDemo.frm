@@ -19,7 +19,7 @@ Begin VB.Form TextBinDemoBox
       _ExtentY        =   847
       _Version        =   393216
    End
-   Begin VB.TextBox TextBox 
+   Begin VB.TextBox ResultsBox 
       BeginProperty Font 
          Name            =   "Lucida Console"
          Size            =   12
@@ -90,41 +90,30 @@ End Enum
 'This structure defines a search action.
 Private Type SearchStr
    Aborted As Boolean                        'Indicates whether the search has been aborted by the user.
-   AlreadyFound() As String                  'Defines the text fragments already found.
    CurrentDataType As DataTypesE             'Defines the data type selected by the user.
    CurrentLineBreakType As LineBreakTypesE   'Defines the line break type selected by the user.
    CurrentPath As String                     'Defines the path of the file to be searched.
    CurrentUnicodeOption As UnicodeOptionsE   'Defines the unicode option selected by the user.
+   PreviousResults() As String               'Defines the previously found results.
 End Type
 
 Private Const GUID_MASK As String = "########-####-####-####-############"   'Defines a GUID's mask. The hash ("#") character stands for "hexadecimal digit".
 
-Private Search As SearchStr                  'The parameters and status information of a search action.
+Private Search As SearchStr                  'Contains the parameters and status information of a search action.
 Private WithEvents TextBin As TextBinClass   'Indicates that Text Bin class contains events to be used by this window.
 Attribute TextBin.VB_VarHelpID = -1
 
-'This procedure adds the text found to the list, if it is a unique text fragment.
-Private Sub AddToList(Text As String)
+'This procedure adds the specified item to the specified list.
+Private Sub AddItemToList(ItemList() As String, Item As String)
 On Error GoTo ErrorTrap
-Dim Index As Long
 
-   With Search
-      If SafeArrayGetDim(.AlreadyFound()) = 0 Then
-         ReDim .AlreadyFound(0 To 0) As String
-      Else
-         For Index = LBound(.AlreadyFound()) To UBound(.AlreadyFound())
-            If Text = .AlreadyFound(Index) Then Exit Sub
-         Next Index
-      
-         ReDim Preserve .AlreadyFound(LBound(.AlreadyFound()) To UBound(.AlreadyFound()) + 1) As String
-      End If
-      
-      .AlreadyFound(UBound(.AlreadyFound())) = Text
-   End With
+   If SafeArrayGetDim(ItemList()) = 0 Then
+      ReDim ItemList(0 To 0) As String
+   Else
+      ReDim Preserve ItemList(LBound(ItemList()) To UBound(ItemList()) + 1) As String
+   End If
    
-   TextBox.Text = TextBox.Text & Text & vbCrLf
-   
-   DisplayStatus
+   ItemList(UBound(ItemList())) = Item
 EndRoutine:
    Exit Sub
    
@@ -162,7 +151,7 @@ Dim Positions As Long
    
    If Text = Fragment Then
       Positions = (RPStart Or RPMiddle Or RPEnd)
-   Else
+   ElseIf Not Text = vbNullString Then
       If Left$(Text, Len(Fragment)) = Fragment Then Positions = Positions Or RPStart
       If Right$(Text, Len(Fragment)) = Fragment Then Positions = Positions Or RPEnd
       If InStrB(2, Left$(Text, Len(Text) - 1), Fragment) > 0 Then Positions = Positions Or RPMiddle
@@ -187,11 +176,11 @@ Private Sub DisplayStatus()
 On Error GoTo ErrorTrap
    With Search
       Me.Caption = App.Title & " - "
-      If SafeArrayGetDim(.AlreadyFound()) = 0 Then
+      If SafeArrayGetDim(.PreviousResults()) = 0 Then
          Me.Caption = Me.Caption & "0 results."
       Else
-         Me.Caption = Me.Caption & CStr(UBound(.AlreadyFound()) - LBound(.AlreadyFound()))
-         If UBound(.AlreadyFound()) - LBound(.AlreadyFound()) = 1 Then Me.Caption = Me.Caption & " result" Else Me.Caption = Me.Caption & " results"
+         Me.Caption = Me.Caption & CStr(UBound(.PreviousResults()) - LBound(.PreviousResults()))
+         If UBound(.PreviousResults()) - LBound(.PreviousResults()) = 1 Then Me.Caption = Me.Caption & " result" Else Me.Caption = Me.Caption & " results"
       End If
    
       Me.Caption = Me.Caption & " found in " & .CurrentPath
@@ -206,15 +195,42 @@ End Sub
 
 
 
+'This procedure checks whether the specified item exists in the specified list and returns the result.
+Private Function ItemExists(SearchList() As String, Item As String) As Boolean
+On Error GoTo ErrorTrap
+Dim Exists As Boolean
+Dim Index As Long
+
+   Exists = False
+   If Not SafeArrayGetDim(SearchList()) = 0 Then
+      For Index = LBound(SearchList()) To UBound(SearchList())
+         If Item = SearchList(Index) Then
+            Exists = True
+            Exit For
+         End If
+      Next Index
+   End If
+   
+EndRoutine:
+   ItemExists = Exists
+   Exit Function
+   
+ErrorTrap:
+   HandleError
+   Resume EndRoutine
+End Function
+
 'This procedure handles any errors that occur.
 Private Sub HandleError()
+Dim Choice As Integer
 Dim ErrorCode As Long
 Dim Message As String
    
    ErrorCode = Err.Number
    Message = Err.Description
    On Error Resume Next
-   MsgBox Message, vbOKOnly Or vbExclamation
+   Choice = MsgBox(Message, vbOKCancel Or vbExclamation Or vbDefaultButton1)
+   If Choice = vbCancel Then End
 End Sub
 
 
@@ -350,10 +366,10 @@ On Error GoTo ErrorTrap
       If Not .CurrentPath = vbNullString Then
          Screen.MousePointer = vbHourglass
          .Aborted = False
-         Erase .AlreadyFound()
+         Erase .PreviousResults()
    
          DisplayStatus
-         TextBox.Text = vbNullString
+         ResultsBox.Text = vbNullString
    
          If Left$(.CurrentPath, 1) = """" Then .CurrentPath = Mid$(.CurrentPath, 2)
          If Right$(.CurrentPath, 1) = """" Then .CurrentPath = Left$(.CurrentPath, Len(.CurrentPath) - 1)
@@ -427,8 +443,8 @@ End Sub
 'This procedure adjusts this window's controls to its new size.
 Private Sub Form_Resize()
 On Error Resume Next
-   TextBox.Width = Me.ScaleWidth
-   TextBox.Height = Me.ScaleHeight
+   ResultsBox.Width = Me.ScaleWidth
+   ResultsBox.Height = Me.ScaleHeight
 End Sub
 
 
@@ -499,7 +515,9 @@ Private Sub TextBin_FoundText(Text As String, ContinueSearch As Boolean)
 On Error GoTo ErrorTrap
 Dim Match As Boolean
 Dim Position As Long
+Dim Result As String
 
+   Result = vbNullString
    Text = Trim$(Text)
    
    If Not Text = vbNullString Then
@@ -523,11 +541,11 @@ Dim Position As Long
                         End If
                   End Select
                Next Position
-               If Match Then AddToList "{" & UCase$(Text) & "}"
+               If Match Then Result = "{" & UCase$(Text) & "}"
             End If
          Case DTDLLReferences
             If CheckPositions(Text, ".", -RPStart) Then
-               If CheckPositions(LCase$(Text), ".dll", RPEnd) Then AddToList LCase$(Text)
+               If CheckPositions(LCase$(Text), ".dll", RPEnd) Then Result = LCase$(Text)
             End If
          Case DTEMailAddresses
             If CheckPositions(Text, "@", RPMiddle) Then
@@ -535,7 +553,7 @@ Dim Position As Long
                   If CheckPositions(Text, ".@", RPNone) Then
                      If CheckPositions(Text, "@.", RPNone) Then
                         If CheckPositions(Text, "..", RPNone) Then
-                           If CheckCount(Text, "@", 1) Then AddToList LCase$(Text)
+                           If CheckCount(Text, "@", 1) Then Result = LCase$(Text)
                         End If
                      End If
                   End If
@@ -545,24 +563,39 @@ Dim Position As Long
             If CheckCount(Text, ",", 1) Then
                If CheckCount(Text, "(", 1) Then
                   If CheckCount(Text, ")", 1) Then
-                     If CheckCount(Text, " ", -1) Then AddToList LCase$(Text$)
+                     If CheckCount(Text, " ", -1) Then Result = LCase$(Text$)
                   End If
                End If
             End If
          Case DTText
-            AddToList Text
+            Result = Text
          Case DTTextBlocks
             Select Case Search.CurrentLineBreakType
                Case LBMSDOS
-                  If CheckCount(Text, vbCr, -1) And CheckCount(Text, vbCrLf, 0) Then AddToList Replace(Text, vbCr, vbCrLf) & vbCrLf
+                  If CheckCount(Text, vbCr, -1) And CheckCount(Text, vbCrLf, 0) Then Result = Replace(Text, vbCr, vbCrLf) & vbCrLf
                Case LBwindows
-                  If CheckCount(Text, vbCrLf, -1) Then AddToList Text & vbCrLf
+                  If CheckCount(Text, vbCrLf, -1) Then Result = Text & vbCrLf
                Case LBUnix
-                  If CheckCount(Text, vbLf, -1) And CheckCount(Text, vbCrLf, 0) Then AddToList Replace(Text, vbLf, vbCrLf) & vbCrLf
+                  If CheckCount(Text, vbLf, -1) And CheckCount(Text, vbCrLf, 0) Then Result = Replace(Text, vbLf, vbCrLf) & vbCrLf
             End Select
          Case DTURLs
-            If CheckPositions(Text, "://", RPMiddle) Then AddToList LCase$(Text)
+            Text = LCase$(Text)
+            
+            Do Until (Left$(Text, 1) >= "a" And Left$(Text, 1) <= "z") Or (Text = vbNullString)
+               Text = Mid$(Text, 2)
+               DoEvents
+            Loop
+            
+            If CheckPositions(Text, "://", RPMiddle) Then Result = Text
       End Select
+   End If
+   
+   If Not Result = vbNullString Then
+      If Not ItemExists(Search.PreviousResults, Result) Then
+         AddItemToList Search.PreviousResults(), Result
+         ResultsBox.Text = ResultsBox.Text & Result & vbCrLf
+         DisplayStatus
+      End If
    End If
    
    DoEvents
@@ -578,11 +611,18 @@ End Sub
 
 'This procedure is called when an error occurs in the Text Bin class.
 Private Sub TextBin_HandleError(ErrorO As Object)
+On Error GoTo ErrorTrap
    MsgBox ErrorO.Description & vbCr & "Error code: " & ErrorO.Number, vbExclamation
+EndRoutine:
+   Exit Sub
+   
+ErrorTrap:
+   HandleError
+   Resume EndRoutine
 End Sub
 
 'This procedure loads a file dropped into
-Private Sub TextBox_OLEDragDrop(Data As DataObject, Effect As Long, Button As Integer, Shift As Integer, X As Single, Y As Single)
+Private Sub ResultsBox_OLEDragDrop(Data As DataObject, Effect As Long, Button As Integer, Shift As Integer, X As Single, Y As Single)
 On Error GoTo ErrorTrap
    If Data.Files.Count > 0 Then
       Search.CurrentPath = Data.Files.Item(1)
