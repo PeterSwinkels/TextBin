@@ -179,7 +179,7 @@ On Error GoTo ErrorTrap
       If SafeArrayGetDim(.PreviousResults()) = 0 Then
          Me.Caption = Me.Caption & "0 results."
       Else
-         Me.Caption = Me.Caption & CStr(UBound(.PreviousResults()) - LBound(.PreviousResults()))
+         Me.Caption = Me.Caption & CStr((UBound(.PreviousResults()) - LBound(.PreviousResults())) + 1)
          If UBound(.PreviousResults()) - LBound(.PreviousResults()) = 1 Then Me.Caption = Me.Caption & " result" Else Me.Caption = Me.Caption & " results"
       End If
    
@@ -223,14 +223,22 @@ End Function
 'This procedure handles any errors that occur.
 Private Sub HandleError()
 Dim Choice As Integer
+Dim Description As String
 Dim ErrorCode As Long
-Dim Message As String
    
+   Description = Err.Description
    ErrorCode = Err.Number
-   Message = Err.Description
-   On Error Resume Next
-   Choice = MsgBox(Message, vbOKCancel Or vbExclamation Or vbDefaultButton1)
+   
+   On Error GoTo ErrorTrap
+   Choice = MsgBox("Error code: " & ErrorCode & vbCr & Description, vbOKCancel Or vbExclamation Or vbDefaultButton1)
    If Choice = vbCancel Then End
+   Exit Sub
+   
+EndProgram:
+   End
+
+ErrorTrap:
+   Resume EndProgram
 End Sub
 
 
@@ -611,8 +619,17 @@ End Sub
 
 'This procedure is called when an error occurs in the Text Bin class.
 Private Sub TextBin_HandleError(ErrorO As Object)
-On Error GoTo ErrorTrap
-   MsgBox ErrorO.Description & vbCr & "Error code: " & ErrorO.Number, vbExclamation
+Dim Choice As Integer
+Dim Description As String
+Dim ErrorCode As Long
+
+   Description = Err.Description
+   ErrorCode = Err.Number
+
+   On Error GoTo ErrorTrap
+   Choice = MsgBox("Error code: " & ErrorCode & vbCr & Description, vbOKCancel Or vbExclamation Or vbDefaultButton1)
+   If Choice = vbCancel Then End
+
 EndRoutine:
    Exit Sub
    
