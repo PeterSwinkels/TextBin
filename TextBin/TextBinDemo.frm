@@ -58,7 +58,7 @@ Attribute VB_Exposed = False
 'This module contains this program's main interface.
 Option Explicit
 
-'The Microsoft Windows API function used by this program.
+'Defines the Microsoft Windows API function(s) used by this program.
 Private Declare Function SafeArrayGetDim Lib "Oleaut32.dll" (ByRef saArray() As Any) As Long
 
 'This enumeration lists the data types supported by this demo.
@@ -81,10 +81,10 @@ End Enum
 
 'This enumeration lists the relative text fragment positions checked for by this demo.
 Private Enum RelativePositionsE
-   RPNone = 0          'No position.
-   RPStart = 1         'The start position.
-   RPMiddle = 2        'The middle position.
-   RPEnd = 4           'The end position.
+   RPNone = 0           'No position.
+   RPStart = 1          'The start position.
+   RPMiddle = 2         'The middle position.
+   RPEnd = 4            'The end position.
 End Enum
 
 'This structure defines a search action.

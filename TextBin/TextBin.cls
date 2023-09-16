@@ -112,7 +112,7 @@ End Sub
 
 
 'This procedure returns the text definition used by this class.
-Public Sub GetTextDefinition(Optional RangeStart As Long = Empty, Optional RangeEnd As Long = Empty, Optional Additional As String = Empty, Optional Excluded As String = Empty, Optional UnicodeOption As UnicodeOptionsE = UOExcludeUnicode)
+Public Sub GetTextDefinition(Optional RangeStart As Long = Empty, Optional RangeEnd As Long = Empty, Optional Additional As String = Empty, Optional Excluded As String = vbNullString, Optional UnicodeOption As UnicodeOptionsE = UOExcludeUnicode)
 On Error GoTo ErrorTrap
    With TextDefinition
       RangeStart = .RangeStart
